@@ -1,0 +1,76 @@
+- hosts: all
+  become: yes
+  become_method: sudo
+  become_user: root
+  vars:
+    - installer: "fmw_14.1.1.0.0_wls.jar"
+    - response_file: "install.rsp"
+    - loc_file: "oraInst.loc"
+  tasks:
+    - name: Installing necessary packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ query('lines', 'cat libraries.txt') }}"
+
+    - name: Creating oracle user and group
+      user:
+        name: oracle
+        create_home: true
+        shell: /bin/bash
+        state: present
+
+    - name: Creating swap space
+      shell: |
+        dd if=/dev/zero of="/home/oracle/swapfile" bs=1024 count="2097152"
+        mkswap "/home/oracle/swapfile"
+        swapon "/home/oracle/swapfile"
+        swapon -s
+      when:
+        ansible_facts['memory_mb']['swap']['total'] == 0
+
+    - name: Creating necessary directories and setting permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: oracle
+        group: oracle
+        mode: 0770
+        recurse: yes
+      with_items:
+        - "/usr/local/Oracle"
+        - "/home/oracle/oraInventory14110"
+
+    - name: Copying necessary files
+      copy:
+         src: "{{ item }}"
+         dest: "/home/oracle/"
+         owner: oracle
+         group: oracle
+         mode: 0644
+      with_items:
+         - "{{ installer }}"
+         - "{{ response_file }}"
+         - "{{ loc_file }}"
+
+    - name: Updating Bashrc
+      lineinfile:
+         path: "/home/oracle//.bashrc"
+         line: "{{ item }}"
+         state: present
+      with_items:
+         - "export MW=/usr/local/Oracle/Middleware/Oracle_Home"
+         - "export PATH=$MW/oracle_common/common/bin:$MW/OPatch:$PATH"
+         - "export JAVA_HOME=/usr/local/jdk"
+         - "export PATH=$JAVA_HOME/bin:$PATH"
+
+    - name: Installing Weblogic
+      shell: "source ~/.bashrc && java -jar ~/{{ installer }} -silent -responseFile ~/{{ response_file }} -invPtrLoc ~/{{ loc_file }}"
+      register: weblogic_output
+      become: yes
+      become_method: sudo
+      become_user: oracle
+
+    - name: Weblogic Setup Log Output
+      debug:
+        msg: "{{ weblogic_output.stdout_lines }}"
