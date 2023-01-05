@@ -1,7 +1,4 @@
-# weblogci-setup-automation-using-ansible
-Full weblogic server set up using ansible
-
-# weblogci-setup-automation-using-ansible
+# weblogic-setup-automation-using-ansible
 Full weblogic server set up using ansible
 
 ## How To
